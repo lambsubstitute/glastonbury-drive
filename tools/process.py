@@ -362,14 +362,20 @@ for hp, attr in he_polys:
 # "<E> <N> <code>" lines become extra markers, so each wall section takes its nearest observed material
 _fn = os.path.join(RDATA if REGION else DATA, "materials_by_eye.txt")
 N_EYE = 0
+EYE_BAYS = []
 if os.path.exists(_fn):
     for line in open(_fn):
         line = line.split("#")[0].split()
         if len(line) < 3 or line[2][0] == "X":
             continue
-        kind, _, hexc = line[2].partition(":")
+        code, _, bay = line[2].partition("+")
+        kind, _, hexc = code.partition(":")
         col = tuple(int(hexc[i:i + 2], 16) for i in (0, 2, 4)) if hexc else None
         MARKERS.append((Point(float(line[0]), float(line[1])), photo_style((kind, col), line[0] + line[1]), None))
+        if bay.startswith("bay:"):       # observed oriel / bay windows: joinery colour, optional number of columns
+            b_ = bay.split(":")
+            EYE_BAYS.append((float(line[0]), float(line[1]), tuple(int(b_[1][i:i + 2], 16) for i in (0, 2, 4)),
+                             int(b_[2]) if len(b_) > 2 else 0))
         N_EYE += 1
     print("materials by eye (street photos):", N_EYE)
 FACADE_TREE = shapely.STRtree([f[0] for f in FACADE])
@@ -1016,7 +1022,24 @@ for s_, W in sink.walls.items():  # one mesh per wall style
     np.array(W["uv"], np.float32).tofile(os.path.join(OUT, f"walls{s_}_uv.bin"))
     np.array(W["col"], np.uint8).tofile(os.path.join(OUT, f"walls{s_}_col.bin"))
     np.array(W["kind"], np.uint8).tofile(os.path.join(OUT, f"walls{s_}_kind.bin"))
-np.array(sink.windows, np.float32).reshape(-1, 11).tofile(os.path.join(OUT, "windows.bin"))
+# observed bays: the window columns nearest each '+bay' point become oriels (style + 10, joinery colour)
+_W = np.array(sink.windows, np.float32).reshape(-1, 11)
+_nb = 0
+for bE, bN, bcol, ncol in EYE_BAYS:
+    bx, bz = to_local(bE, bN)
+    d = np.hypot(_W[:, 0] - bx, _W[:, 2] - bz)
+    near = np.where((d < (9 if ncol else 5)) & (_W[:, 7] < 10))[0]
+    cols_ = {}
+    for i in near:                                   # a column = windows stacked at one spot on the wall
+        cols_.setdefault((round(float(_W[i, 0]), 1), round(float(_W[i, 2]), 1)), []).append(i)
+    order = sorted(cols_.values(), key=lambda c_: d[c_[0]])
+    for c_ in (order[:ncol] if ncol else order):
+        for i in sorted(c_, key=lambda i_: _W[i_, 1])[:1 if ncol else 2]:   # lowest storey(s) only
+            _W[i, 7] += 10
+            _W[i, 8:11] = bcol
+            _nb += 1
+print("observed bay windows:", _nb)
+_W.tofile(os.path.join(OUT, "windows.bin"))
 print("facade kit: window openings on street-facing walls", len(sink.windows))
 np.array(sink.roof["pos"], np.float32).tofile(os.path.join(OUT, "roof_pos.bin"))
 np.array(sink.roof["uv"], np.float32).tofile(os.path.join(OUT, "roof_uv.bin"))

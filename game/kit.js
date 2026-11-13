@@ -11,7 +11,15 @@ export function buildFacadeKit(scene, W) {
   for (let i = 0; i < n; i++) {
     const o = i * ROW, w = W[o + 5], h = W[o + 6], st = W[o + 7], r = W[o + 8], g = W[o + 9], b = W[o + 10];
     const light = [236, 231, 222], stone = [Math.min(255, r * 1.06 + 8), Math.min(255, g * 1.06 + 8), Math.min(255, b * 1.06 + 8)];
-    if (st === 4) {            // brick: stone sill, gauged-brick flat arch
+    if (st >= 10) {            // observed oriel bay: a glazed box on a corbel, joinery in the colour seen in the photo
+      const bw = Math.max(1.7, w + 0.7), bd = 0.55, lo = -0.45, bh = h + 0.6, J = [r, g, b];
+      boxes.push([i, 0, lo - 0.14, bw + 0.10, 0.14, bd + 0.05, ...J]);                 // corbelled base
+      boxes.push([i, 0, lo, bw, 0.45, bd, ...J]);                                      // panelled apron below the glass
+      boxes.push([i, 0, lo + 0.45, bw - 0.12, bh - 0.45, bd - 0.05, 52, 64, 74]);      // glazing
+      for (const s of [-1, -1 / 3, 1 / 3, 1]) boxes.push([i, s * (bw / 2 - 0.05), lo + 0.45, 0.10, bh - 0.45, bd, ...J]);   // posts and mullions
+      boxes.push([i, 0, lo + 0.45 + (bh - 0.45) * 0.62, bw, 0.07, bd, ...J]);          // transom
+      boxes.push([i, 0, lo + bh, bw + 0.16, 0.16, bd + 0.08, ...J]);                   // head / little roof
+    } else if (st === 4) {            // brick: stone sill, gauged-brick flat arch
       boxes.push([i, 0, -0.07, w + 0.24, 0.07, 0.11, ...light]);
       boxes.push([i, 0, h + 0.01, w + 0.22, 0.21, 0.035, 198, 132, 98]);
     } else if (st === 0) {     // render / painted: moulded surround and sill

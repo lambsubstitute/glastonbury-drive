@@ -834,7 +834,16 @@ def shop_units(pieces, shops_here, bid, old_building, hs):
 
 n_b = 0
 stats = {"lidar": 0, "fallback": 0, "listed": 0}
+# hand-built landmarks (data/landmarks.py, see tools/landmark_kit.py): their outlines are left to the model
+LANDMARKS = None
+if not REGION and os.path.exists(os.path.join(DATA, "landmarks.py")):
+    import importlib.util
+    _sp = importlib.util.spec_from_file_location("landmarks", os.path.join(DATA, "landmarks.py"))
+    LANDMARKS = importlib.util.module_from_spec(_sp)
+    _sp.loader.exec_module(LANDMARKS)
 for bid0, t, g in BLDG:
+    if LANDMARKS and any(test(t) and g.intersects(zone) for test, zone in LANDMARKS.EXCLUDE):
+        continue
     if REGION:   # a building belongs to the cell its middle is in, and is never cut at a cell edge
         if not TILE.contains(g.representative_point()) or g.intersects(TOWN_BOX):
             continue   # (anything touching the town tile was already built, clipped, by the town run)
@@ -1015,6 +1024,15 @@ for bid0, t, g in BLDG:
         bdraw.polygon([((x - E_MIN), (N_MAX - y)) for x, y in poly.buffer(1.5).exterior.coords], fill=255)
         n_b += 1
 
+if LANDMARKS:
+    import landmark_kit
+    _f0 = len(foot_out)
+    _K = landmark_kit.Kit(sink, foot_out, to_local, lambda E, N: np.ravel(sample(dtm, np.atleast_1d(E), np.atleast_1d(N))))
+    LANDMARKS.build(_K)
+    for rec in foot_out[_f0:]:          # keep the tree finder off the stonework (LIDAR sees wall tops as canopy)
+        _pg = Polygon([(x + E0 - E_MIN, N_MAX - (N0 - z)) for x, z in rec["p"]]).buffer(2.5)
+        bdraw.polygon(list(_pg.exterior.coords), fill=255)
+    print("landmarks: hand-built triangles", _K.n_tris, "footprints", len(foot_out) - _f0)
 print("buildings:", n_b, stats, "roof tris", len(sink.roof["pos"]) // 9)
 
 for s_, W in sink.walls.items():  # one mesh per wall style

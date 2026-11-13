@@ -54,10 +54,16 @@ false
 -560.0,
 -60.0,
 "Benedict Street"
+],
+[
+"Abbey ruins",
+-260.0,
+51.0,
+false
 ]
 ],
-"build": "20261113133332",
+"build": "20261113134114",
 "regions": [],
 "regionTeleports": {},
-"ao": "20261113133332"
+"ao": "20261113134114"
 }

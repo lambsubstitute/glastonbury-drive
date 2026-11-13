@@ -1047,6 +1047,9 @@ if LANDMARKS:
         bdraw.polygon(list(_pg.exterior.coords), fill=255)
     print("landmarks: hand-built triangles", _K.n_tris, "footprints", len(foot_out) - _f0)
 print("buildings:", n_b, stats, "roof tris", len(sink.roof["pos"]) // 9)
+print("clean roofs:", ctx.get("roof_kinds", {}), "of", stats.get("planar", 0), "buildings")
+import rooffit as _rf
+print("regularise rejected:", dict(_rf.REJECT))
 
 for s_, W in sink.walls.items():  # one mesh per wall style
     np.array(W["pos"], np.float32).tofile(os.path.join(OUT, f"walls{s_}_pos.bin"))

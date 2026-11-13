@@ -5,6 +5,7 @@ Wall vertices carry a `kind`: 0 = window bay, 1 = plain wall, 2 = shopfront. The
 3-cell texture atlas per wall style using that kind.
 """
 import math
+import os
 import numpy as np
 import shapely
 from shapely.geometry import Point, Polygon, box as sbox
@@ -13,6 +14,7 @@ from scipy.spatial import Delaunay, cKDTree
 from scipy import ndimage
 
 import roofseg
+import rooffit
 
 KIND_WINDOW, KIND_PLAIN, KIND_SHOP, KIND_TOP = 0, 1, 2, 3
 # where the window sits inside its 3.2 m x one-storey texture cell (game/facades.js): style -> kind ->
@@ -160,7 +162,45 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
 
     shade = 0.94 + 0.06 * ((sum(map(ord, bid)) % 97) / 97.0)
     rcol = [int(c * shade) for c in rc]
-    if len(pix_xy) > 1:
+    # clean roof: a fitted template (rectangle-like footprints) or the LIDAR facets snapped to the building's
+    # axes and cut along exact ridge / hip / valley lines (tools/rooffit.py); else the raw pixel facets below
+    fit = None
+    if use_lidar and ipm is not None and len(ipm[0]) >= 12 and not is_church:
+        Hf = dsm_s[ipm[0], ipm[1]] - base
+        fit = rooffit.template(poly, roof_area, ipm[2], ipm[3], Hf)
+        if fit is None and len(pix_xy) > 1:
+            def to_bng(a, b, c, ox, oy):
+                # roofseg planes are in pixel-local coords: x = E - E_MIN - 0.5 - c0, y = N - N_MAX + 0.5 + r0
+                return (a, b, c + a * (ox - E_MIN - 0.5 - c0) + b * (oy - N_MAX + 0.5 + r0))
+            fit = rooffit.regularise(poly, roof_area, ipm[2], ipm[3], Hf, planes, labels, to_bng)
+        if fit is not None:
+            ctx.setdefault("roof_kinds", {}).setdefault(fit["kind"], 0)
+            ctx["roof_kinds"][fit["kind"]] += 1
+    if os.environ.get("ROOF_DEBUG"):     # colour roofs by method: gable red, hip orange, flat grey, shed yellow,
+        rcol = {"gable": [200, 40, 40], "hip": [230, 140, 30], "flat": [150, 150, 150], "shed": [230, 220, 40],
+                "regular": [40, 90, 220]}.get(fit["kind"] if fit else None, [220, 40, 220])   # regularised blue, raw magenta
+    if fit is not None:
+        fox, foy = fit["origin"]
+        old_planes = planes
+        planes = fit["planes"]
+        facet_geoms = fit["facets"]
+        hmax = max(hmax, float(planes[:, 2].max()) + 0.3) if len(planes) else hmax
+        _ftree = shapely.STRtree([g_ for _, g_ in facet_geoms])
+
+        fzmax = fit.get("zmax")
+
+        def plane_z(k, E, N):
+            a, b, c = planes[k]
+            top = hmax if fzmax is None else min(hmax, fzmax[k])
+            return min(max(a * (E - fox) + b * (N - foy) + c, LO), top)
+
+        def label_at(E, N):
+            i_ = _ftree.nearest(Point(E, N))
+            return int(facet_geoms[int(i_)][0])
+
+        # chimneys found by roofseg sit on its facets: re-home them onto the clean faces
+        chimneys = [(x, y, s_, h_, label_at(E_MIN + 0.5 + c0 + x, N_MAX - 0.5 - (r0 - y))) for (x, y, s_, h_, _) in chimneys]
+    elif len(pix_xy) > 1:
         rows, cols = ipm[0], ipm[1]
         minx, miny, maxx, maxy = roof_area.bounds
         cA, cB = int(math.floor(minx - E_MIN)) - 1, int(math.ceil(maxx - E_MIN)) + 1

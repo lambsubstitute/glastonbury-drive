@@ -14,6 +14,11 @@ from scipy import ndimage
 import roofseg
 
 KIND_WINDOW, KIND_PLAIN, KIND_SHOP, KIND_TOP = 0, 1, 2, 3
+# where the window sits inside its 3.2 m x one-storey texture cell (game/facades.js): style -> kind ->
+# (u left, u right, v sill, v head).  Styles without an entry (timber, church, shed) get no kit pieces.
+_SASH = {KIND_WINDOW: (0.336, 0.664, 0.281, 0.797), KIND_TOP: (0.336, 0.664, 0.246, 0.586)}
+_MULL = {KIND_WINDOW: (0.258, 0.742, 0.273, 0.820), KIND_TOP: (0.258, 0.742, 0.240, 0.601)}
+WINDOW_RECT = {0: _SASH, 4: _SASH, 5: _MULL}
 JETTY = 0.22          # timber-frame upper storeys oversail the one below by this much (m)
 CORNICE_STYLES = (0, 4, 5)
 OVERHANG = 0.32
@@ -26,6 +31,9 @@ class Sink:
     def __init__(self, nstyles):
         self.walls = {s: {"pos": [], "uv": [], "col": [], "kind": []} for s in range(nstyles)}
         self.roof = {"pos": [], "uv": [], "col": []}
+        # one row per window opening on a street-facing wall, for the 3D facade kit (sills, heads, surrounds):
+        # x, sill y, z, outward normal x, z, width, height, wall style, wall r, g, b  (local metres)
+        self.windows = []
 
     def wall_quad(self, style, p0b, p1b, p1t, p0t, uv0b, uv1b, uv1t, uv0t, col, kind):
         W = self.walls[style]
@@ -308,7 +316,7 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
     eave = max(eave, LO)
     # storeys are counted from the ground along the street front, not the lowest corner of the plot:
     # many town plots fall away behind the street, and measuring from the back sinks the whole facade
-    fsamples = []
+    fsamples, ftops = [], []
     ep0 = ring_ep[0]
     for i_ in range(len(ep0)):
         nx_, ny_, party_ = seg_info[0][i_]
@@ -325,6 +333,7 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
         tl_ = math.hypot(tox_, toy_) or 1
         if d_ < w_ / 2 + 9 and (tox_ * nx_ + toy_ * ny_) / tl_ > 0.35:
             fsamples.append(float(sample(dtm, mx_ + nx_ * 1.5, my_ + ny_ * 1.5)[0]))
+            ftops.append(float(btop[i_]))
     if fsamples:
         fbase = float(np.median(fsamples)) + 0.1
     else:
@@ -332,6 +341,10 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
         fbase = float(np.median(sample(dtm, arr0[:, 0], arr0[:, 1])))
     fbase = min(max(fbase, base), base + 3.0)
     e_abs = base + eave
+    # the eave is a low percentile of the whole outline, so a block with low back ranges gets a one-storey
+    # eave and its taller street front was left as a blank "gable". Count storeys to the street front's own top.
+    if len(ftops) >= 3:
+        e_abs = max(e_abs, base + float(np.percentile(ftops, 30)))
     rise = e_abs - fbase
     nfl = max(1, int(round(rise / 2.9))) if rise > 2.4 else 1
     # the ground storey is taller than the ones above (shops, halls); upper storeys share the rest
@@ -456,6 +469,19 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
                 v = lambda y_, vb_=vb_, vh_=vh_: (y_ - vb_) / vh_
                 sink.wall_quad(s_style, [q0[0], b0, q0[1]], [q1[0], b1, q1[1]], [q1[0], tt1, q1[1]], [q0[0], tt0, q0[1]],
                                [u0, v(b0)], [u1, v(b1)], [u1, v(tt1)], [u0, v(tt0)], col, kind)
+                wr = WINDOW_RECT.get(s_style, {}).get(kind)
+                if wr and street and u1 > u0:
+                    Lrun = math.hypot(q1[0] - q0[0], q1[1] - q0[1])
+                    for kb in range(int(math.floor(u0)), int(math.ceil(u1))):
+                        if kb + wr[0] < u0 + 0.02 or kb + wr[1] > u1 - 0.02:
+                            continue                            # this run of wall cuts the window
+                        f_ = (kb + 0.5 - u0) / (u1 - u0)
+                        ys, yh = vb_ + wr[2] * vh_, vb_ + wr[3] * vh_
+                        if ys < b0 + (b1 - b0) * f_ + 0.05 or yh > tt0 + (tt1 - tt0) * f_ - 0.03:
+                            continue                            # sill below the ground line / head above the wall top
+                        sink.windows.append([q0[0] + (q1[0] - q0[0]) * f_, ys, q0[1] + (q1[1] - q0[1]) * f_,
+                                             nl[0], nl[1], (wr[1] - wr[0]) * Lrun / (u1 - u0), yh - ys, s_style,
+                                             col[0], col[1], col[2]])
                 if o > 0:
                     # jetty soffit under this storey, from the storey below's face out to this one
                     if lvl >= 1 and name != "gable" and b0 > g0 + 0.5:

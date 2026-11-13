@@ -1016,6 +1016,8 @@ for s_, W in sink.walls.items():  # one mesh per wall style
     np.array(W["uv"], np.float32).tofile(os.path.join(OUT, f"walls{s_}_uv.bin"))
     np.array(W["col"], np.uint8).tofile(os.path.join(OUT, f"walls{s_}_col.bin"))
     np.array(W["kind"], np.uint8).tofile(os.path.join(OUT, f"walls{s_}_kind.bin"))
+np.array(sink.windows, np.float32).reshape(-1, 11).tofile(os.path.join(OUT, "windows.bin"))
+print("facade kit: window openings on street-facing walls", len(sink.windows))
 np.array(sink.roof["pos"], np.float32).tofile(os.path.join(OUT, "roof_pos.bin"))
 np.array(sink.roof["uv"], np.float32).tofile(os.path.join(OUT, "roof_uv.bin"))
 np.array(sink.roof["col"], np.uint8).tofile(os.path.join(OUT, "roof_col.bin"))

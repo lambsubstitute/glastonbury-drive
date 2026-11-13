@@ -33,6 +33,7 @@ Open http://localhost:8765. WASD/arrows drive, Space handbrake, C camera (chase 
 - **Street objects**: where Mapillary or OSM have them they are real (positions can be a few metres out, and are pushed off carriageways); lamp posts elsewhere are generated.
 - **Glastonbury Abbey** is a ruin; it is modelled from its outline and LIDAR like any other building, so it reads as low roofless blocks rather than standing arches.
 - **St Michael's Tower** on the Tor is on foot-only ground in reality; the game lets you teleport a car to the summit.
+- **Windows**: positions are generated, not observed: one window per 3.2 m bay per upper storey. Storeys are counted to the street front's own wall top (from LIDAR), so tall fronts over low back ranges get their upper windows. Street-facing windows (8,223) carry real 3D sills, heads and surrounds (`game/kit.js`): stone sill and brick flat arch on brick, moulded surround on render, hood mould and mullion on ashlar. Bay and oriel windows are not modelled.
 - **Lighting**: ambient occlusion is baked with Blender (Cycles) after each build: one value per wall and roof vertex, and a 2048 px top-down map for ground, roads and pavements. Wall triangles are large (median 3.5 m), so wall shading is coarse; it shows most from above and in yards and alleys. The game runs without the bake.
 - Trees are placed from LIDAR canopy peaks; species and shapes are generic.
 
@@ -55,4 +56,4 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 Attribution: © OpenStreetMap contributors (ODbL); © Environment Agency (OGL); © Historic England (OGL); contains OS data © Crown copyright and database right 2026 (OGL); street objects © Mapillary contributors (CC BY-SA).
 
-Known gaps: St Michael's Tower stands 13.5 m in the model (really about 21 m) because 1 m LIDAR barely resolves a 7 m roofless shell; distance fog hides most of the view from the Tor summit.
+Known gaps: St Michael's Tower stands 13.5 m in the model (really about 21 m) because 1 m LIDAR barely resolves a 7 m roofless shell.

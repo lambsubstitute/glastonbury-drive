@@ -1,0 +1,13 @@
+# OSM shop name | shopfront paint (hex) | fascia/sign background (hex, optional)
+# Read by eye from Mapillary crops (2020-2023), only where the shop's own name is legible.
+The Riflemans Arms | 2a3530
+Bancroft Carpets | 1d2540 | f0f0f0
+Tin Pot Pasty Co | 3a4038 | 3a4038
+Lazy Gecko Cafe | c8451e | e8dcc0
+The Market House | 22262e | 22262e
+Abbey Tea Rooms | f0eee8 | f0eee8
+Janice Made This | 9aa890 | f2f2ee
+Daisy May's | e8cc30 | d8d040
+Wyrd Raven | e8e6e0 | 3a2a22
+Sew Over the Moon | 2e2e32 | 2e2e32
+The King Arthur's | 1c1e1c | 1c1e1c

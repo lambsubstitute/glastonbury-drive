@@ -113,3 +113,13 @@
 349449.1 138836.9 B   # Benedict Street #178
 349445.4 138858.3 B   # Benedict Street #179
 349457.9 138838.7 B   # Benedict Street #180
+# High Street: read by eye from Wikimedia Commons photos (Category:High Street, Glastonbury, 2009-2022) and Mapillary crops,
+# placed through the OSM shop unit whose name is legible in (or anchored next to) the photo.
+349992.1 138969.5 C:6f9cdc   # High Street, Crystals
+349983.6 138967.4 S:cfc3a0   # High Street, White Rabbit
+349975.6 138965.5 S:cfc3a0   # High Street, Dilliway & Dilliway
+349969.0 138963.9 C:d8502c   # High Street, The Goddess and the Green Man
+350242.2 139004.7 B   # High Street, Chocolate Love Temple
+349890.1 138942.4 S:c8b488   # High Street, The Mystic Garden Gallery
+350079.5 138990.3 W   # High Street, Sew Over the Moon
+350105.4 138978.3 S:7a7060   # High Street, Hundred Monkeys

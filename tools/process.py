@@ -231,6 +231,67 @@ if os.path.exists(os.path.join(RDATA, "os_buildings.json")):
         _n_os += 1
     print("OS OpenMap Local buildings added:", _n_os, "OSM buildings:", len(BLDG) - _n_os)
 
+
+
+def split_on_slope(key, t, g, step=1.0):
+    """A whole street block mapped as one outline has one ground level and one eave, so on a sloping street
+    its uphill end sinks into the pavement and its downhill end floats. Cut such an outline into slices with
+    straight lines along the contours of the ground under it (a plane fitted to the DTM), one slice per
+    `step` metres of rise, so each slice is built from its own ground level and its own LIDAR eave."""
+    if g.area < 250 or t.get("building") in ("church", "chapel", "cathedral"):
+        return [(key, t, g)]
+    x0, y0, x1, y1 = g.bounds
+    xs, ys = np.meshgrid(np.arange(x0 + 0.5, x1, 2.0), np.arange(y0 + 0.5, y1, 2.0))
+    inside = shapely.contains_xy(g, xs.ravel(), ys.ravel())
+    if inside.sum() < 12:
+        return [(key, t, g)]
+    X, Y = xs.ravel()[inside], ys.ravel()[inside]
+    Z = sample(dtm, X, Y)
+    ok = np.isfinite(Z)
+    X, Y, Z = X[ok], Y[ok], Z[ok]
+    if len(Z) < 12 or np.percentile(Z, 95) - np.percentile(Z, 5) < 1.6:
+        return [(key, t, g)]
+    cx, cy = X.mean(), Y.mean()
+    (a, b, c), *_ = np.linalg.lstsq(np.c_[X - cx, Y - cy, np.ones(len(X))], Z, rcond=None)
+    slope = math.hypot(a, b)
+    fit = a * (X - cx) + b * (Y - cy) + c
+    if slope < 0.015 or fit.max() - fit.min() < 1.6:
+        return [(key, t, g)]
+    ux, uy = a / slope, b / slope                      # uphill direction; contours run across it
+    R = math.hypot(x1 - x0, y1 - y0)
+    parts = [g]
+    z = math.floor(fit.min() / step) * step + step
+    while z < fit.max():
+        d = (z - c) / slope                            # distance uphill from the centroid to this contour
+        px, py = cx + ux * d, cy + uy * d
+        cut = LineString([(px - uy * R, py + ux * R), (px + uy * R, py - ux * R)])
+        nxt = []
+        for part in parts:
+            try:
+                nxt += [q for q in shapely.ops.split(part, cut).geoms] if cut.intersects(part) else [part]
+            except Exception:
+                nxt.append(part)
+        parts = nxt
+        z += step
+    parts = [q for pp in parts for q in polys_of(pp)]
+    # slivers go back to the neighbour they share most wall with
+    big = [q for q in parts if q.area >= 30]
+    for q in parts:
+        if q.area >= 30 or not big:
+            continue
+        i = max(range(len(big)), key=lambda i_: big[i_].buffer(0.05).intersection(q.buffer(0.05)).area)
+        m = shapely.union_all([big[i], q.buffer(0.01)]).buffer(-0.01)
+        if m.geom_type == "Polygon":
+            big[i] = m
+    if len(big) < 2:
+        return [(key, t, g)]
+    return [(f"{key}/{k}", t, q) for k, q in enumerate(big)]
+
+
+_n0 = len(BLDG)
+BLDG = [piece for rec in BLDG for piece in split_on_slope(*rec)]
+print("outlines cut along the slope:", len(BLDG) - _n0, "extra slices")
+
 # ---------------------------------------------------------------- Historic England
 print("loading listed buildings")
 he = json.load(open(os.path.join(RDATA, "lb_polys.json")))["features"]

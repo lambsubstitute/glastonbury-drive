@@ -1,0 +1,62 @@
+{
+"name": "Glastonbury",
+"title": "Glastonbury Drive",
+"spawn": [
+-414.995,
+-12.965000000000002
+],
+"spawnRoad": "High Street",
+"teleports": [
+[
+"Market Cross",
+-415.0,
+-12.97,
+"High Street"
+],
+[
+"Abbey Gatehouse",
+-395.0,
+50.0,
+"Magdalene Street"
+],
+[
+"St John's Church",
+-298.0,
+-111.0,
+"High Street"
+],
+[
+"Abbey Barn",
+62.0,
+349.0,
+"Bere Lane"
+],
+[
+"Chalice Well",
+459.0,
+334.0,
+"Chilkwell Street"
+],
+[
+"Tor (foot)",
+700.0,
+420.0,
+"Wellhouse Lane"
+],
+[
+"Tor summit",
+890.0,
+288.0,
+false
+],
+[
+"St Benedict's",
+-560.0,
+-60.0,
+"Benedict Street"
+]
+],
+"build": "20261113074348",
+"regions": [],
+"regionTeleports": {}
+}

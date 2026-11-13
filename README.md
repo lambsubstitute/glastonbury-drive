@@ -46,6 +46,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python tools/place.py mapillary    # needs ~/.mapillary_token
 .venv/bin/python tools/process.py
 .venv/bin/python tools/bake_ao.py          # optional, needs Blender: baked ambient occlusion (about 1 minute)
+/Applications/Blender.app/Contents/MacOS/Blender -b -P tools/car_blender.py -- game/models/car.glb   # the player's car (hatchback modelled in code); add a .png path for Cycles previews
 .venv/bin/python tools/check.py
 .venv/bin/python tools/roof_check.py
 ```

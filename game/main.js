@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { makeFacadeAtlases, facadeMaterial, roofTexture } from './facades.js';
 import { buildStreet, buildPavements } from './street.js';
 import { buildShopfronts } from './shopfronts.js';
@@ -468,7 +469,8 @@ const landmarks = foots.filter(f => f.n).map(f => {
   return { n: f.n, g: f.g, m: f.m, x: cx / f.p.length, z: cz / f.p.length };
 });
 
-// ------------------------------------------------------------------ car (generic low-poly coupe)
+// ------------------------------------------------------------------ car
+// fallback if models/car.glb cannot be loaded: generic low-poly coupe
 function buildCar(color) {
   const car = new THREE.Group();
   const body = new THREE.Group(); car.add(body);
@@ -499,7 +501,56 @@ function buildCar(color) {
   }
   return { car, body, wheels };
 }
-const { car, body: carBody, wheels } = buildCar(0xb3261e);
+// The car is modelled in Blender by tools/car_blender.py (glb: Car > Body + Wheel_XX > Wheel_XX_Spin/_Brake).
+// Paint and glass reflect a small outdoor environment (sky over dark ground, a sun spot) made just for the
+// car, so the town's own lighting is unchanged.
+function carEnvMap() {
+  const env = new THREE.Scene();
+  const g = new THREE.SphereGeometry(10, 48, 24), p = g.attributes.position, col = [];
+  const zen = new THREE.Color(0x6f93b8), hor = new THREE.Color(0xe4ebf0), gnd = new THREE.Color(0x3d3b36), c = new THREE.Color();
+  for (let i = 0; i < p.count; i++) {
+    const y = p.getY(i) / 10;
+    if (y >= 0) c.copy(hor).lerp(zen, Math.pow(y, 0.6)); else c.copy(hor).lerp(gnd, Math.min(1, -y * 6));
+    col.push(c.r, c.g, c.b);
+  }
+  g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  env.add(new THREE.Mesh(g, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide })));
+  const sunSpot = new THREE.Mesh(new THREE.SphereGeometry(0.35, 16, 8), new THREE.MeshBasicMaterial({ color: new THREE.Color(14, 13, 11) }));
+  sunSpot.position.copy(SUN_DIR).multiplyScalar(9); env.add(sunSpot);
+  const pm = new THREE.PMREMGenerator(renderer);
+  const tex = pm.fromScene(env, 0.02).texture; pm.dispose();
+  return tex;
+}
+async function loadCar() {
+  try {
+    const gltf = await new GLTFLoader().loadAsync('models/car.glb');
+    const root = gltf.scene.getObjectByName('Car');
+    const body = root && root.getObjectByName('Body');
+    const wheels = ['Wheel_FL', 'Wheel_FR', 'Wheel_RL', 'Wheel_RR'].map(n => root && root.getObjectByName(n));
+    if (!body || wheels.some(w => !w)) throw new Error('car.glb lacks Car/Body/Wheel_* nodes');
+    const env = carEnvMap();
+    let glass = null;
+    root.traverse(o => {
+      if (!o.isMesh) return;
+      o.castShadow = true; o.receiveShadow = true;
+      o.material.envMap = env; o.material.envMapIntensity = o.material.name === 'Glass' ? 1.3 : 1.0;
+      if (o.material.name === 'Glass') glass = o.material;
+    });
+    return { car: root, body, wheels, glass, spins: wheels.map(w => [w.getObjectByName(w.name + '_Spin')]) };
+  } catch (e) {
+    console.warn('car.glb not loaded, using the built-in car', e);
+    const c = buildCar(0xb3261e);
+    return { ...c, spins: c.wheels.map(w => w.children) };
+  }
+}
+const { car, body: carBody, wheels, glass: carGlass, spins: wheelSpins } = await loadCar();
+// from the driver's seat the (opaque) car glass turns see-through
+let glassSeeThrough = false;
+function setGlassSeeThrough(on) {
+  if (!carGlass || on === glassSeeThrough) return;
+  glassSeeThrough = on;
+  carGlass.transparent = on; carGlass.opacity = on ? 0.12 : 1; carGlass.depthWrite = !on; carGlass.needsUpdate = true;
+}
 scene.add(car);
 
 // ------------------------------------------------------------------ state
@@ -746,8 +797,10 @@ function updateCamera(dt) {
     look = new THREE.Vector3(S.x + fx * 4, S.y + 1.1, S.z + fz * 4);
     want.y = Math.max(want.y, terrainY(want.x, want.z) + 1.5);
   } else if (camMode === 1) {
-    want = new THREE.Vector3(S.x + fx * 0.2, S.y + 1.25, S.z + fz * 0.2);
-    look = new THREE.Vector3(S.x + fx * 20, S.y + 1.0, S.z + fz * 20);
+    // driver's eye: right-hand seat (UK), behind the windscreen
+    const rx = -fz * 0.36, rz = fx * 0.36;
+    want = new THREE.Vector3(S.x + fx * -0.15 + rx, S.y + 1.2, S.z + fz * -0.15 + rz);
+    look = new THREE.Vector3(S.x + fx * 20 + rx, S.y + 0.95, S.z + fz * 20 + rz);
   } else if (camMode === 4 && window.__pose) {
     // fixed pose (used to line the view up with a real street photo)
     const P = window.__pose;
@@ -782,7 +835,8 @@ function frame() {
   car.position.set(S.x, S.y, S.z);
   car.rotation.set(0, 0, 0); car.rotateY(S.h); car.rotateX(-S.pitch); car.rotateZ(S.roll);
   carBody.rotation.x = -Math.max(-0.04, Math.min(0.04, (keys.KeyW || keys.ArrowUp ? -0.015 : 0) + (keys.KeyS || keys.ArrowDown ? 0.02 : 0)));
-  for (let i = 0; i < 4; i++) { wheels[i].children[0].rotation.x += S.v * dt / 0.33; wheels[i].children[1].rotation.x = wheels[i].children[0].rotation.x; if (i < 2) wheels[i].rotation.y = S.steer; }
+  for (let i = 0; i < 4; i++) { for (const o of wheelSpins[i]) o.rotation.x += S.v * dt / 0.32; if (i < 2) wheels[i].rotation.y = S.steer; }
+  setGlassSeeThrough(camMode === 1);
   updateCamera(dt);
   updateHUD(dt);
   drawMinimap();

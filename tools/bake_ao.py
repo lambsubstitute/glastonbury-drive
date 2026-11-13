@@ -15,7 +15,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "game", "data")
 BLENDER = sys.argv[sys.argv.index("--blender") + 1] if "--blender" in sys.argv else (
     shutil.which("blender") or "/Applications/Blender.app/Contents/MacOS/Blender")
-FLOOR, GAMMA = 0.38, 0.85          # darkest multiplier, and a curve that keeps open walls near full brightness
+FLOOR, GAMMA = 0.38, 0.85
+WALL_FLOOR, WALL_GAMMA = 0.66, 0.45          # darkest multiplier, and a curve that keeps open walls near full brightness
 
 T = json.load(open(os.path.join(OUT, "terrain.json")))
 work = tempfile.mkdtemp(prefix="bake_ao_")
@@ -50,8 +51,13 @@ raw = np.clip(np.load(os.path.join(work, "ao_corners.npy")), 0, 1)
 # (a flat roof near 1.0). Divide by what the surface would see with nothing around it, so only real
 # enclosure (alleys, re-entrant corners, overhanging neighbours) darkens it.
 open_sky = np.clip((1 + np.concatenate(ups)) / 2, 0.5, 1.0)
-ao = np.clip(raw / open_sky, 0, 1) ** GAMMA
-ao = FLOOR + (1 - FLOOR) * ao
+ao = np.clip(raw / open_sky, 0, 1)
+# walls are sampled only at their corners, which sit where wall meets ground, roof or neighbour, so even an
+# open wall reads half occluded and the big triangles smear that across the whole face. Walls therefore get
+# a gentle curve and a high floor (shade in alleys, no general darkening); roofs keep the full range.
+is_wall = np.concatenate(ups) < 0.3
+ao = np.where(is_wall, WALL_FLOOR + (1 - WALL_FLOOR) * ao ** WALL_GAMMA, FLOOR + (1 - FLOOR) * ao ** GAMMA)
+print("mean wall %.2f, mean roof %.2f" % (ao[is_wall].mean(), ao[~is_wall].mean()))
 k = 0
 for f, m, flip in parts:
     a = ao[k * 3:(k + m) * 3].reshape(-1, 3).copy()

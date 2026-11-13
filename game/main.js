@@ -129,7 +129,7 @@ addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
 });
 
-scene.add(new THREE.HemisphereLight(0xdfe8f0, 0x5a6040, 1.15));
+scene.add(new THREE.HemisphereLight(0xdfe8f0, 0x6e6a58, 1.5));
 const sun = new THREE.DirectionalLight(0xfff1dc, 2.1);
 sun.castShadow = true;
 sun.shadow.mapSize.set(4096, 4096);

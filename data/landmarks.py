@@ -6,7 +6,7 @@ the buildings and the Commons photos - they are the right kind of thing in the r
 """
 import math
 from shapely.geometry import box, Polygon
-from landmark_kit import opening, stepped, battlements
+from landmark_kit import opening, stepped, battlements, STYLE_RENDER, STYLE_BRICK, STYLE_ASHLAR
 
 TOWER_STONE = (156, 148, 130)
 ABBEY_STONE = (181, 170, 144)
@@ -108,6 +108,40 @@ def build_abbey(K):
     K.wall(A(-17, -24), A(-17, -50), 0.9, stepped([(0, 2.6), (26, 2.0)], rough=0.3, seed=59), S)
 
 
+# ---- Market Place, east side: nos. 6-8 and the brick building south of them ---------------------------
+# One OSM outline covers this whole block. Plot widths, eaves and ridges are read from the 1 m LIDAR along
+# the frontage; fronts are read from a 2023 Mapillary frame (id 1333817450545843) and the Commons photo
+# filed under listing 1345452. Window sizes and exact positions are by eye.
+CUT = [box(349888.0, 138891.6, 349899.5, 138928.6)]
+WHITE, CLAY, SLATE = (240, 238, 232), (150, 82, 60), (84, 86, 92)
+
+
+def build_market_place(K):
+    # no. 6: tall, narrow, white-painted gable front with black quoins; rubble stone flank; clay tiles
+    K.house((349889.9, 138921.3), (349892.3, 138928.0), 6.5, 8.0, 10.9, WHITE, CLAY, roof="gable_front",
+            side_col=(150, 140, 125), side_style=STYLE_ASHLAR, quoins=(28, 28, 30), shop_h=2.9,
+            windows=[opening(3.55, 1.3, 3.9, 6.2, "round"), opening(3.55, 1.15, 6.9, 8.7, "flat")],
+            shops=[(0.3, 6.8, None, "2b2f2c", "2b2f2c")], name="6, Market Place", grade="II")
+    # low single-storey link carrying the shopfront across to no. 7
+    K.house((349891.2, 138918.5), (349891.2, 138921.3), 5.0, 3.1, 3.7, WHITE, CLAY,
+            shops=[(0.0, 2.8, None, "19a5c8", "19a5c8")])
+    # no. 7: white gable to the street with dark bargeboards, wide first-floor window, small attic light
+    K.house((349889.4, 138913.2), (349889.0, 138918.5), 11.0, 5.2, 8.1, WHITE, CLAY, roof="gable_front",
+            barge=(34, 32, 30), windows=[opening(2.65, 2.2, 3.5, 4.9, "flat"), opening(2.65, 0.9, 5.6, 6.7, "flat")],
+            shops=[(0.1, 5.2, "Ashok & Babali Good Karma", "19a5c8", "e8d44a")], name="7, Market Place", grade="II")
+    # no. 8 and its neighbour: long low white range, roof along the street, four small sashes, three shops
+    K.house((349890.2, 138902.5), (349889.4, 138913.2), 7.0, 5.8, 8.0, (238, 236, 230), (118, 96, 80),
+            windows=[opening(s, 0.9, 3.7, 5.1, "flat") for s in (1.4, 4.0, 6.7, 9.3)],
+            shops=[(0.1, 3.6, "Little Imps", "1c1c1e", "1c1c1e"), (3.6, 7.2, None, "28b8a8", "e8409a"),
+                   (7.2, 10.6, "Elestial", "28b8a8", "e8409a")], name="8, Market Place", grade="II")
+    # three-storey red brick with stone quoins, three bays, slate roof; stone shopfront
+    K.house((349891.0, 138891.6), (349890.2, 138902.5), 8.5, 9.6, 12.2, (255, 232, 216), SLATE, style=STYLE_BRICK,
+            quoins=(215, 205, 180), shop_h=3.6,
+            windows=[opening(s, 1.1, y0, y1, "flat") for s in (1.9, 5.45, 9.0) for y0, y1 in ((4.4, 6.3), (7.2, 8.9))],
+            shops=[(0.1, 10.8, "Man, Myth & Magik", "b8aa90", "dcdce0")])
+
+
 def build(K):
     build_tower(K)
     build_abbey(K)
+    build_market_place(K)

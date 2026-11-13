@@ -288,6 +288,17 @@ def split_on_slope(key, t, g, step=1.0):
     return [(f"{key}/{k}", t, q) for k, q in enumerate(big)]
 
 
+# hand-built landmarks (data/landmarks.py, see tools/landmark_kit.py): their outlines are left to the model
+LANDMARKS = None
+if not REGION and os.path.exists(os.path.join(DATA, "landmarks.py")):
+    import importlib.util
+    _sp = importlib.util.spec_from_file_location("landmarks", os.path.join(DATA, "landmarks.py"))
+    LANDMARKS = importlib.util.module_from_spec(_sp)
+    _sp.loader.exec_module(LANDMARKS)
+# plots drawn by hand (LANDMARKS.CUT) are cut out of whatever block outline covers them
+for _cut in getattr(LANDMARKS, "CUT", []) if LANDMARKS else []:
+    BLDG = [(k_, t_, g_.difference(_cut) if g_.intersects(_cut) else g_) for k_, t_, g_ in BLDG]
+BLDG = [(k_, t_, g_) for k_, t_, g_ in BLDG if not g_.is_empty]
 _n0 = len(BLDG)
 BLDG = [piece for rec in BLDG for piece in split_on_slope(*rec)]
 print("outlines cut along the slope:", len(BLDG) - _n0, "extra slices")
@@ -841,13 +852,6 @@ def shop_units(pieces, shops_here, bid, old_building, hs):
 
 n_b = 0
 stats = {"lidar": 0, "fallback": 0, "listed": 0}
-# hand-built landmarks (data/landmarks.py, see tools/landmark_kit.py): their outlines are left to the model
-LANDMARKS = None
-if not REGION and os.path.exists(os.path.join(DATA, "landmarks.py")):
-    import importlib.util
-    _sp = importlib.util.spec_from_file_location("landmarks", os.path.join(DATA, "landmarks.py"))
-    LANDMARKS = importlib.util.module_from_spec(_sp)
-    _sp.loader.exec_module(LANDMARKS)
 for bid0, t, g in BLDG:
     if LANDMARKS and any(test(t) and g.intersects(zone) for test, zone in LANDMARKS.EXCLUDE):
         continue
@@ -981,6 +985,8 @@ for bid0, t, g in BLDG:
             fh = facade_at(mx, my)
             if fh is None and _inside:
                 fh = min(_inside, key=lambda m: m[0].distance(Point(mx, my)))
+                if fh[0].distance(Point(mx, my)) > 14:      # a listing colours its own front, not a whole block
+                    fh = None
             if fh is not None:
                 facade_hit[0] = fh
                 return fh[1]
@@ -1034,7 +1040,7 @@ for bid0, t, g in BLDG:
 if LANDMARKS:
     import landmark_kit
     _f0 = len(foot_out)
-    _K = landmark_kit.Kit(sink, foot_out, to_local, lambda E, N: np.ravel(sample(dtm, np.atleast_1d(E), np.atleast_1d(N))))
+    _K = landmark_kit.Kit(sink, foot_out, to_local, lambda E, N: np.ravel(sample(dtm, np.atleast_1d(E), np.atleast_1d(N))), shopfront_out)
     LANDMARKS.build(_K)
     for rec in foot_out[_f0:]:          # keep the tree finder off the stonework (LIDAR sees wall tops as canopy)
         _pg = Polygon([(x + E0 - E_MIN, N_MAX - (N0 - z)) for x, z in rec["p"]]).buffer(2.5)

@@ -7,7 +7,8 @@ Wall vertices carry a `kind`: 0 = window bay, 1 = plain wall, 2 = shopfront. The
 import math
 import numpy as np
 import shapely
-from shapely.geometry import Point
+from shapely.geometry import Point, Polygon, box as sbox
+from shapely.geometry.polygon import orient
 from scipy.spatial import Delaunay, cKDTree
 from scipy import ndimage
 
@@ -34,10 +35,19 @@ class Sink:
         # one row per window opening on a street-facing wall, for the 3D facade kit (sills, heads, surrounds):
         # x, sill y, z, outward normal x, z, width, height, wall style, wall r, g, b  (local metres)
         self.windows = []
+        self.deep_windows = 0
 
     def wall_quad(self, style, p0b, p1b, p1t, p0t, uv0b, uv1b, uv1t, uv0t, col, kind):
         W = self.walls[style]
         for p, uv in ((p0b, uv0b), (p1b, uv1b), (p1t, uv1t), (p0b, uv0b), (p1t, uv1t), (p0t, uv0t)):
+            W["pos"] += p
+            W["uv"] += uv
+            W["col"] += col
+            W["kind"].append(kind)
+
+    def wall_tri(self, style, pts, uvs, col, kind):
+        W = self.walls[style]
+        for p, uv in zip(pts, uvs):
             W["pos"] += p
             W["uv"] += uv
             W["col"] += col
@@ -467,11 +477,10 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
                 q0 = [l0[0] + nl[0] * o, l0[1] + nl[1] * o]
                 q1 = [l1[0] + nl[0] * o, l1[1] + nl[1] * o]
                 v = lambda y_, vb_=vb_, vh_=vh_: (y_ - vb_) / vh_
-                sink.wall_quad(s_style, [q0[0], b0, q0[1]], [q1[0], b1, q1[1]], [q1[0], tt1, q1[1]], [q0[0], tt0, q0[1]],
-                               [u0, v(b0)], [u1, v(b1)], [u1, v(tt1)], [u0, v(tt0)], col, kind)
                 wr = WINDOW_RECT.get(s_style, {}).get(kind)
+                wins = []
+                Lrun = math.hypot(q1[0] - q0[0], q1[1] - q0[1])
                 if wr and street and u1 > u0:
-                    Lrun = math.hypot(q1[0] - q0[0], q1[1] - q0[1])
                     for kb in range(int(math.floor(u0)), int(math.ceil(u1))):
                         if kb + wr[0] < u0 + 0.02 or kb + wr[1] > u1 - 0.02:
                             continue                            # this run of wall cuts the window
@@ -479,9 +488,43 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
                         ys, yh = vb_ + wr[2] * vh_, vb_ + wr[3] * vh_
                         if ys < b0 + (b1 - b0) * f_ + 0.05 or yh > tt0 + (tt1 - tt0) * f_ - 0.03:
                             continue                            # sill below the ground line / head above the wall top
+                        ww_ = (wr[1] - wr[0]) * Lrun / (u1 - u0)
+                        wins.append((kb, f_, ys, yh, ww_))
                         sink.windows.append([q0[0] + (q1[0] - q0[0]) * f_, ys, q0[1] + (q1[1] - q0[1]) * f_,
-                                             nl[0], nl[1], (wr[1] - wr[0]) * Lrun / (u1 - u0), yh - ys, s_style,
-                                             col[0], col[1], col[2]])
+                                             nl[0], nl[1], ww_, yh - ys, s_style, col[0], col[1], col[2]])
+                deep = wins and ctx.get("deep") is not None and Lrun > 0.5 and ctx["deep"].contains(
+                    Point((x0 + x1) / 2, (y0 + y1) / 2))
+                if not deep:
+                    sink.wall_quad(s_style, [q0[0], b0, q0[1]], [q1[0], b1, q1[1]], [q1[0], tt1, q1[1]], [q0[0], tt0, q0[1]],
+                                   [u0, v(b0)], [u1, v(b1)], [u1, v(tt1)], [u0, v(tt0)], col, kind)
+                else:
+                    # real openings: the wall face is cut round each window, with 0.2 m reveals and the sash set
+                    # back in the hole (the painted window from the texture, cropped to the opening)
+                    DEPTH = 0.2
+                    PT = lambda s_, y_, d_=0.0: [q0[0] + (q1[0] - q0[0]) * s_ / Lrun - nl[0] * d_, y_,
+                                                 q0[1] + (q1[1] - q0[1]) * s_ / Lrun - nl[1] * d_]
+                    UV = lambda s_, y_: [u0 + (u1 - u0) * s_ / Lrun, v(y_)]
+                    face = Polygon([(0, b0), (Lrun, b1), (Lrun, tt1), (0, tt0)])
+                    holes = [sbox(f_ * Lrun - ww_ / 2, ys, f_ * Lrun + ww_ / 2, yh) for _, f_, ys, yh, ww_ in wins]
+                    cutface = face.difference(shapely.union_all(holes))
+                    for g_ in (cutface.geoms if hasattr(cutface, "geoms") else [cutface]):
+                        if g_.geom_type != "Polygon" or g_.area < 1e-4:
+                            continue
+                        for t_ in shapely.constrained_delaunay_triangles(g_).geoms:
+                            c_ = list(orient(t_, 1).exterior.coords)[:3]
+                            sink.wall_tri(s_style, [PT(a_, b_) for a_, b_ in c_], [UV(a_, b_) for a_, b_ in c_], col, KIND_PLAIN)
+                    rcol = [int(c_ * 0.78) for c_ in col]
+                    for (kb, f_, ys, yh, ww_) in wins:
+                        sa_, sb_ = f_ * Lrun - ww_ / 2, f_ * Lrun + ww_ / 2
+                        for A_, B_, C_, D_ in ((PT(sa_, ys), PT(sa_, ys, DEPTH), PT(sa_, yh, DEPTH), PT(sa_, yh)),
+                                               (PT(sb_, ys, DEPTH), PT(sb_, ys), PT(sb_, yh), PT(sb_, yh, DEPTH)),
+                                               (PT(sa_, ys), PT(sb_, ys), PT(sb_, ys, DEPTH), PT(sa_, ys, DEPTH)),
+                                               (PT(sa_, yh, DEPTH), PT(sb_, yh, DEPTH), PT(sb_, yh), PT(sa_, yh))):
+                            sink.wall_quad(s_style, A_, B_, C_, D_, [0, 0], [0.06, 0], [0.06, 0.4], [0, 0.4], rcol, KIND_PLAIN)
+                        sink.wall_quad(s_style, PT(sa_, ys, DEPTH), PT(sb_, ys, DEPTH), PT(sb_, yh, DEPTH), PT(sa_, yh, DEPTH),
+                                       [kb + wr[0], wr[2]], [kb + wr[1], wr[2]], [kb + wr[1], wr[3]], [kb + wr[0], wr[3]],
+                                       [255, 255, 255], kind)
+                        sink.deep_windows += 1
                 if o > 0:
                     # jetty soffit under this storey, from the storey below's face out to this one
                     if lvl >= 1 and name != "gable" and b0 > g0 + 0.5:

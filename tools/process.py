@@ -657,6 +657,13 @@ for e in osm:
         _rl.append(LineString(proj(e["geometry"])))
         _rw.append(road_width(t))
 ROAD_TREE = shapely.STRtree(_rl)
+# streets whose fronts get real cut window openings (place.json "deep_fronts": [road names]); costly in
+# triangles, so it is opt-in per street
+_deep = [LineString(proj(e["geometry"])) for e in osm if e["type"] == "way" and e.get("geometry")
+         and e.get("tags", {}).get("highway") and e["tags"].get("name") in PLACE.get("deep_fronts", [])]
+DEEP_ZONE = shapely.union_all(_deep).buffer(22) if _deep and not REGION else None
+if DEEP_ZONE is not None:
+    shapely.prepare(DEEP_ZONE)
 
 
 
@@ -743,7 +750,7 @@ def roof_under_trees(poly, pm, base, bid):
 
 
 ctx = {"E_MIN": E_MIN, "N_MAX": N_MAX, "E0": E0, "N0": N0, "dsm_s": DSM_B, "dtm": dtm, "sample": sample,
-       "ALL_B": ALL_B, "road_near": road_near, "B_LIST": _all, "B_TREE": shapely.STRtree(_all)}
+       "ALL_B": ALL_B, "road_near": road_near, "B_LIST": _all, "B_TREE": shapely.STRtree(_all), "deep": DEEP_ZONE}
 sink = buildgeo.Sink(NSTYLES)
 
 
@@ -1058,7 +1065,7 @@ for bE, bN, bcol, ncol in EYE_BAYS:
             _nb += 1
 print("observed bay windows:", _nb)
 _W.tofile(os.path.join(OUT, "windows.bin"))
-print("facade kit: window openings on street-facing walls", len(sink.windows))
+print("facade kit: window openings on street-facing walls", len(sink.windows), "| cut through:", sink.deep_windows)
 np.array(sink.roof["pos"], np.float32).tofile(os.path.join(OUT, "roof_pos.bin"))
 np.array(sink.roof["uv"], np.float32).tofile(os.path.join(OUT, "roof_uv.bin"))
 np.array(sink.roof["col"], np.uint8).tofile(os.path.join(OUT, "roof_col.bin"))

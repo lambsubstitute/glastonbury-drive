@@ -43,9 +43,11 @@ async function loadSet(p) {
   }
   const windows = await binOpt(p + 'windows.bin', Float32Array);
   const pave = await bin(p + 'pave_tris.bin', Float32Array), kerbs = await bin(p + 'kerbs.bin', Float32Array);
+  // merged carriageway mesh + road markings (tools/roadmarks.py); older builds lack them and fall back to strips
+  const roadTris = await binOpt(p + 'road_tris.bin', Float32Array), marks = await binOpt(p + 'markings.bin', Float32Array);
   let horizon = null;
   if (tm.horizon) horizon = { ...tm.horizon, p, h: await bin(p + 'horizon.bin', Uint16Array) };
-  return { p, tm, th, dh, kg, roads, foots, water, trees, shops, street, walls, roof, pave, kerbs, horizon, windows };
+  return { p, tm, th, dh, kg, roads, foots, water, trees, shops, street, walls, roof, pave, kerbs, horizon, windows, roadTris, marks };
 }
 const SETS = await Promise.all(['', ...REGIONS.map(r => r + '/')].map(loadSet));
 const cat = (arrs, T) => { const o = new T(arrs.reduce((a, b) => a + b.length, 0)); let k = 0; for (const a of arrs) { o.set(a, k); k += a.length; } return o; };
@@ -170,6 +172,35 @@ function noise(ctx, w, h, amt, alpha = 0.08) {
     ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2);
   }
 }
+// asphalt seen from above, 512 px = 8 m, sampled by world position (no seams at junctions)
+const asphaltTex = () => canvasTex(512, 512, (x, w, h) => {
+  x.fillStyle = '#58595b'; x.fillRect(0, 0, w, h);
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  // broad tonal drift, drawn so it wraps across the tile edges
+  const wrapDraw = (f) => { for (const ox of [-w, 0, w]) for (const oy of [-h, 0, h]) f(ox, oy); };
+  for (let i = 0; i < 26; i++) {
+    const cx = rnd(0, w), cy = rnd(0, h), r = rnd(30, 120), v = Math.random() < 0.5 ? 40 : 110;
+    wrapDraw((ox, oy) => {
+      const g = x.createRadialGradient(cx + ox, cy + oy, 0, cx + ox, cy + oy, r);
+      g.addColorStop(0, `rgba(${v},${v},${v + 2},.10)`); g.addColorStop(1, `rgba(${v},${v},${v},0)`);
+      x.fillStyle = g; x.fillRect(cx + ox - r, cy + oy - r, 2 * r, 2 * r);
+    });
+  }
+  // aggregate: light stones and dark binder, 1-2 px
+  for (let i = 0; i < 26000; i++) {
+    const v = Math.random() < 0.55 ? rnd(120, 175) : rnd(20, 50);
+    x.fillStyle = `rgba(${v | 0},${v | 0},${(v + 3) | 0},${rnd(0.15, 0.45).toFixed(2)})`;
+    const s = Math.random() < 0.8 ? 1 : 2;
+    x.fillRect(Math.random() * w, Math.random() * h, s, s);
+  }
+  // hairline cracks
+  x.strokeStyle = 'rgba(25,25,25,.35)'; x.lineWidth = 1;
+  for (let i = 0; i < 5; i++) {
+    let px = rnd(0, w), py = rnd(0, h); x.beginPath(); x.moveTo(px, py);
+    for (let k = 0; k < 8; k++) { px += rnd(-14, 14); py += rnd(-14, 14); x.lineTo(px, py); }
+    x.stroke();
+  }
+}, true);
 const roadTex = (marked) => canvasTex(64, 256, (x, w, h) => {
   x.fillStyle = '#5a5c5e'; x.fillRect(0, 0, w, h); noise(x, w, h, 3000, 0.12);
   if (marked) {
@@ -269,11 +300,55 @@ if (HZ) {
 
 // ------------------------------------------------------------------ roads
 const ROAD_RANK = { primary: 6, trunk: 7, secondary: 5, tertiary: 4, primary_link: 5, residential: 3, unclassified: 3, living_street: 2, pedestrian: 2, service: 1, track: 0 };
+// carriageway height: kerb foot 0.15 m over the ground model, the crown up to 5 cm higher 3 m in from the edge
+const ROAD_Y = 0.15, CROWN = 0.05;
+const crown = (d) => CROWN * Math.min(Math.max(d, 0), 3) / 3;
+const HAS_RMESH = SETS.every(s => s.roadTris.length > 0);
+if (HAS_RMESH) {
+  // one merged surface per set (junction shapes included); vertex d = metres to the nearest kerb/edge
+  for (const s of SETS) {
+    const T = s.roadTris, n = T.length / 3, pos = new Float32Array(n * 3), uv = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) {
+      const x = T[i * 3], z = T[i * 3 + 1];
+      pos[i * 3] = x; pos[i * 3 + 1] = terrainY(x, z) + ROAD_Y + crown(T[i * 3 + 2]); pos[i * 3 + 2] = z;
+      uv[i * 2] = x / 8; uv[i * 2 + 1] = z / 8;
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, ao.wrap(new THREE.MeshStandardMaterial({
+      map: asphaltTex(), roughness: 0.93, side: THREE.DoubleSide, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
+    })));
+    m.receiveShadow = true; m.renderOrder = 1; scene.add(m);
+    // markings: (x, z, d, colour) per vertex, 12 mm proud of the surface
+    const M = s.marks, k = M.length / 4;
+    if (!k) continue;
+    const mp = new Float32Array(k * 3), mc = new Float32Array(k * 3);
+    const COL = [[0.93, 0.92, 0.88], [0.92, 0.74, 0.18]];
+    for (let i = 0; i < k; i++) {
+      const x = M[i * 4], z = M[i * 4 + 1], c = COL[M[i * 4 + 3] | 0] || COL[0];
+      mp[i * 3] = x; mp[i * 3 + 1] = terrainY(x, z) + ROAD_Y + crown(M[i * 4 + 2]) + 0.012; mp[i * 3 + 2] = z;
+      mc.set(c, i * 3);
+    }
+    const mg = new THREE.BufferGeometry();
+    mg.setAttribute('position', new THREE.BufferAttribute(mp, 3));
+    mg.setAttribute('color', new THREE.BufferAttribute(mc, 3));
+    mg.computeVertexNormals();
+    const mm = new THREE.Mesh(mg, ao.wrap(new THREE.MeshStandardMaterial({
+      vertexColors: true, roughness: 0.6, side: THREE.DoubleSide, depthWrite: false,
+      polygonOffset: true, polygonOffsetFactor: -6, polygonOffsetUnits: -6,
+    })));
+    mm.receiveShadow = true; mm.renderOrder = 2; scene.add(mm);
+  }
+}
 {
   const groups = { marked: { p: [], uv: [], i: [] }, plain: { p: [], uv: [], i: [] } };
   const parapets = [];
   const sorted = [...roads].sort((a, b) => (ROAD_RANK[a.t] ?? 2) - (ROAD_RANK[b.t] ?? 2));
   for (const r of sorted) {
+    if (HAS_RMESH && !r.b) continue;   // the merged mesh covers every road but bridge decks
     const marked = r.w >= 5 && !['service', 'track', 'pedestrian', 'living_street'].includes(r.t);
     const G = marked ? groups.marked : groups.plain;
     const pts = r.pts, n = pts.length, hw = r.w / 2;
@@ -427,7 +502,7 @@ let onPavement = () => false;
   const pv = SETS.map(s => buildPavements(scene, s.pave, s.kerbs, terrainY));
   onPavement = (x, z) => pv.some(f => f(x, z));
   const groundY = (x, z) => terrainY(x, z) + (onPavement(x, z) ? 0.31 : 0);
-  const { posts, segs } = buildStreet(scene, street, groundY);
+  const { posts, segs } = buildStreet(scene, street, groundY, { markings: HAS_RMESH });
   buildShopfronts(scene, shopUnits, groundY);
   for (const [x, z, r] of posts) {
     const k = hkey(Math.floor(x / CELL), Math.floor(z / CELL)); if (!treeHash.has(k)) treeHash.set(k, []); treeHash.get(k).push([x, z, r]);
@@ -692,7 +767,7 @@ function physics(dt) {
   const hit = collide();
   if (hit > 6) { flash('Crunch!', 700); shake = Math.min(1, hit / 20); }
   // ground follow
-  const g = driveY(S.x, S.z) + (kind === 2 ? 0.16 : onPavement(S.x, S.z) ? 0.31 : onRoad ? 0.16 : 0);
+  const g = driveY(S.x, S.z) + (kind === 2 || (onRoad && !onPavement(S.x, S.z)) ? ROAD_Y + 0.01 + crown(roadEdgeD) : onPavement(S.x, S.z) ? 0.31 : 0);
   if (S.y > g + 0.05) { S.yv -= 9.8 * dt; S.y += S.yv * dt; if (S.y < g) { S.y = g; S.yv = 0; } }
   else { S.y = g; S.yv = 0; }
   const hf = driveY(S.x + fx * 1.4, S.z + fz * 1.4), hr = driveY(S.x - fx * 1.4, S.z - fz * 1.4);
@@ -709,13 +784,14 @@ function waterName() { return 'Splash! Into the river…'; }
 const elSpd = document.getElementById('spd'), elStreet = document.getElementById('street'), elLm = document.getElementById('landmark'), elMsg = document.getElementById('msg');
 let msgT = 0;
 function flash(t, ms = 1400) { elMsg.textContent = t; elMsg.style.opacity = 1; msgT = performance.now() + ms; }
-let onRoad = false, hudT = 0, lastStreet = '';
+let onRoad = false, hudT = 0, lastStreet = '', roadEdgeD = 0;
 function updateHUD(dt) {
   elSpd.textContent = Math.round(Math.abs(S.v) * 2.23694);
   if (performance.now() > msgT) elMsg.style.opacity = 0;
   hudT += dt; if (hudT < 0.15) return; hudT = 0;
   const r = nearestRoad(S.x, S.z, 25);
   onRoad = !!(r && r.d < r.road.w / 2 + 0.8);
+  roadEdgeD = r ? r.road.w / 2 - r.d : 0;
   let label = r && r.d < r.road.w / 2 + 6 ? (r.road.n || ({ service: 'Service road', track: 'Track' }[r.road.t] || 'Unnamed road')) : 'Off road';
   if (r && r.road.r && r.road.n && r.road.n !== r.road.r) label += `<small>${r.road.r}</small>`;
   if (label !== lastStreet) { elStreet.innerHTML = label; lastStreet = label; }

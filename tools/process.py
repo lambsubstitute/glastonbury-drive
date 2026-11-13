@@ -1497,6 +1497,15 @@ for f in list(furn):
                      "x": round(f["x"] + cx_ * o, 2), "z": round(f["z"] + cz_ * o, 2),
                      "r": round(f["r"] + (math.pi if (sgn > 0 and f["t"] != "zebra") else 0), 3)})
 
+# ---- one merged carriageway mesh (junctions included) + road markings from the OSM road graph
+print("road surface + markings")
+import roadmarks
+_gaps = ROADS_U.buffer(3.0, join_style="mitre").buffer(-3.0, join_style="mitre").difference(ROADS_U).difference(ALL_B).difference(PAVE_U)
+roadmarks.build(osm=osm, street_osm=street_osm, mly_feats=mly_feats, furn=furn, road_width=road_width, drive_w=_DRIVE_W,
+                proj=proj, TF=TF, to_local=to_local, E0=E0, N0=N0, roads_u=ROADS_U,
+                extra_tarmac=road_islands + [g_ for g_ in polys_of(_gaps) if g_.area > 0.5],
+                pave_u=PAVE_U, all_b=ALL_B, tile=TILE, rural=RURAL, out=OUT)
+
 # ---- keep every standing object off the carriageway: push it to the nearest kerb + 0.6 m, or drop it
 ROAD_KEEP_OUT = ROADS_U.buffer(0.35)
 ROAD_EDGE_OUT = ROADS_U.buffer(0.6)

@@ -1,6 +1,7 @@
 // Street-level detail: OSM benches, bins, post boxes, bus stops, phone boxes, cabinets, signals,
 // zebra + pelican crossings, garden walls / fences / hedges, and lamp posts along built-up streets.
 import * as THREE from 'three';
+import { ao } from './ao.js';
 
 const M = (o) => new THREE.MeshStandardMaterial(o);
 // hedges: break up the flat box colour with world-space leaf clumps (instanced boxes have stretched UVs)
@@ -230,7 +231,7 @@ export function buildPavements(scene, tris, kerbs, terrainY) {
   g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
   g.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   g.computeVertexNormals();
-  const pm = new THREE.Mesh(g, new THREE.MeshStandardMaterial({ map: slabTexture(), roughness: 0.92, side: THREE.DoubleSide }));
+  const pm = new THREE.Mesh(g, ao.wrap(new THREE.MeshStandardMaterial({ map: slabTexture(), roughness: 0.92, side: THREE.DoubleSide })));
   pm.receiveShadow = true; scene.add(pm);
 
   // kerb stones: vertical face from carriageway to pavement + a 150 mm granite top strip

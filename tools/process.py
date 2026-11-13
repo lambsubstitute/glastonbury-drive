@@ -1760,7 +1760,8 @@ if REGION:
 
 # ---------------------------------------------------------------- terrain grid (2.5 m)
 print("terrain")
-GN, GS = 1000, 2.5
+GS = 2.5
+GN = int(round(SIZE / GS))          # whole tile, whatever its size (was fixed at 1000 = a 2.5 km tile)
 k = (np.arange(GN) + 0.5) * GS - 0.5
 rr, cc = np.meshgrid(k, k, indexing="ij")
 terr = ndimage.map_coordinates(ndimage.uniform_filter(dtm, 2), [rr, cc], order=1, mode="nearest")

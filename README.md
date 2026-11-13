@@ -33,6 +33,7 @@ Open http://localhost:8765. WASD/arrows drive, Space handbrake, C camera (chase 
 - **Street objects**: where Mapillary or OSM have them they are real (positions can be a few metres out, and are pushed off carriageways); lamp posts elsewhere are generated.
 - **Glastonbury Abbey** is a ruin; it is modelled from its outline and LIDAR like any other building, so it reads as low roofless blocks rather than standing arches.
 - **St Michael's Tower** on the Tor is on foot-only ground in reality; the game lets you teleport a car to the summit.
+- **Lighting**: ambient occlusion is baked with Blender (Cycles) after each build: one value per wall and roof vertex, and a 2048 px top-down map for ground, roads and pavements. Wall triangles are large (median 3.5 m), so wall shading is coarse; it shows most from above and in yards and alleys. The game runs without the bake.
 - Trees are placed from LIDAR canopy peaks; species and shapes are generic.
 
 ## Rebuild
@@ -43,6 +44,7 @@ python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python tools/place.py os           # OS OpenMap Local, 116 MB zip
 .venv/bin/python tools/place.py mapillary    # needs ~/.mapillary_token
 .venv/bin/python tools/process.py
+.venv/bin/python tools/bake_ao.py          # optional, needs Blender: baked ambient occlusion (about 1 minute)
 .venv/bin/python tools/check.py
 .venv/bin/python tools/roof_check.py
 ```

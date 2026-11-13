@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { makeFacadeAtlases, facadeMaterial, roofTexture } from './facades.js';
 import { buildStreet, buildPavements } from './street.js';
 import { buildShopfronts } from './shopfronts.js';
+import { ao } from './ao.js';
 
 // ------------------------------------------------------------------ loading
 // The world is the town tile (data/) plus any countryside regions listed in meta.json (data/<region>/),
@@ -21,6 +22,7 @@ const V = (f) => D + f + (BUILD ? `?v=${BUILD}` : '');
 const bin = async (f, T) => { const b = await (await fetch(V(f))).arrayBuffer(); tick(); return new T(b); };
 const json = async (f) => { const j = await (await fetch(V(f))).json(); tick(); return j; };
 
+const HAS_AO = !!META.ao && META.ao === BUILD;
 async function loadSet(p) {
   const [tm, th, dh, kg, roads, foots, water, trees, shops, street] = await Promise.all([
     json(p + 'terrain.json'), bin(p + 'terrain.bin', Uint16Array), bin(p + 'drive.bin', Uint16Array), bin(p + 'kind.bin', Uint8Array),
@@ -31,6 +33,11 @@ async function loadSet(p) {
     col: await bin(`${p}walls${s}_col.bin`, Uint8Array), kind: await bin(`${p}walls${s}_kind.bin`, Uint8Array),
   })));
   const roof = { pos: await bin(p + 'roof_pos.bin', Float32Array), uv: await bin(p + 'roof_uv.bin', Float32Array), col: await bin(p + 'roof_col.bin', Uint8Array) };
+  if (HAS_AO && p === '') {   // baked ambient occlusion, one byte per vertex: darken the vertex colours once, here
+    const mul = (col, a) => { for (let i = 0; i < a.length; i++) for (let k = 0; k < 3; k++) col[i * 3 + k] = col[i * 3 + k] * a[i] / 255; };
+    for (let s = 0; s < 6; s++) mul(walls[s].col, await bin(`${p}walls${s}_ao.bin`, Uint8Array));
+    mul(roof.col, await bin(p + 'roof_ao.bin', Uint8Array));
+  }
   const pave = await bin(p + 'pave_tris.bin', Float32Array), kerbs = await bin(p + 'kerbs.bin', Float32Array);
   let horizon = null;
   if (tm.horizon) horizon = { ...tm.horizon, p, h: await bin(p + 'horizon.bin', Uint16Array) };
@@ -194,10 +201,11 @@ function gridMesh(G, mat, uvOf) {
   scene.add(mesh);
   return mesh;
 }
+if (HAS_AO) ao.enable(V('ground_ao.jpg'), GRIDS[0].x0, GRIDS[0].z0, GRIDS[0].w);
 const groundTex = (f) => {
   const t = new THREE.TextureLoader().load(V(f), tick);
   t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = renderer.capabilities.getMaxAnisotropy();
-  return new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 });
+  return ao.wrap(new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 }));
 };
 gridMesh(GRIDS[0], groundTex('ground.jpg'), (u, v) => [u, 1 - v]);
 {
@@ -314,10 +322,10 @@ const ROAD_RANK = { primary: 6, trunk: 7, secondary: 5, tertiary: 4, primary_lin
     g.setAttribute('uv', new THREE.Float32BufferAttribute(G.uv, 2));
     g.setIndex(G.i);
     g.computeVertexNormals();
-    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({
+    const m = new THREE.Mesh(g, ao.wrap(new THREE.MeshStandardMaterial({
       map: tex, roughness: 0.9, side: THREE.DoubleSide, depthWrite: false,
       polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4,
-    }));
+    })));
     m.receiveShadow = true; m.renderOrder = 1;
     scene.add(m);
   };

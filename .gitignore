@@ -16,3 +16,5 @@ data/wcs_cache/
 data/*.log
 data/shop_sheets/
 data/shopfront_index.json
+data/facade_sheets/
+data/facade_index.json

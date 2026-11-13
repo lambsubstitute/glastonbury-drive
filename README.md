@@ -21,13 +21,13 @@ Open http://localhost:8765. WASD/arrows drive, Space handbrake, C camera (chase 
 | Historic England NHLE | 154 listed buildings: which are listed, grades, names |
 | Wikidata + Wikimedia Commons | real wall materials of 19 listed buildings, read by eye from photos (`data/materials_by_photo.txt`) |
 | OS OpenMap Local (square ST) | 1,195 building outlines where OSM has none (whole estates were missing from OSM) |
-| Mapillary | street lights, bins, poles, signal heads and traffic signs detected from street photos |
+| Mapillary | street lights, bins, poles, signal heads and traffic signs detected from street photos; shopfront colours and frontage materials read by eye from its photos |
 
 ## What is real and what is not
 
 - **Roofs and heights** come from LIDAR: area-weighted median roof error 0.29 m against the first-return surface; 13% of roof area is more than 1 m off (mostly edges and steps).
 - **Building outlines**: OSM first, OS OpenMap Local where OSM has nothing. OS outlines are generalised (terraces are one block).
-- **Wall materials**: 19 listed buildings are classified by eye from Commons photos (stone for the Abbey buildings, the churches, the Tribunal, the George & Pilgrims, the Town Hall; painted render for the Crown, 2 Market Place and others). Only 26 of the 154 listings had a photo linked on Wikidata, so the other listed buildings and every unlisted building have generated materials.
+- **Wall materials**: 19 listed buildings are classified by eye from Commons photos (stone for the Abbey buildings, the churches, the Tribunal, the George & Pilgrims, the Town Hall; painted render for the Crown, 2 Market Place and others). Only 26 of the 154 listings had a photo linked on Wikidata. On Magdalene Street, Benedict Street, Northload Street and parts of High Street a further 113 pieces of frontage (41 buildings) are classified by eye from Mapillary photos taken 2020-2023 (`tools/facade_photos.py`, `data/materials_by_eye.txt`); photo positions are a few metres out, so pieces were skipped where the photo straddled two buildings, and most of High Street was skipped because its photos look along the street rather than at the fronts. Every other building has generated materials.
 - **Shopfronts**: shop names and positions are from OSM. Paint and fascia colours of 11 shops are read by eye from Mapillary photos taken 2020-2023 (`data/shopfronts_from_photos.txt`), only where the shop's own name was legible; they may have been repainted since. The other 115 named shops have generated colours.
 - **Street objects**: where Mapillary or OSM have them they are real (positions can be a few metres out, and are pushed off carriageways); lamp posts elsewhere are generated.
 - **Glastonbury Abbey** is a ruin; it is modelled from its outline and LIDAR like any other building, so it reads as low roofless blocks rather than standing arches.

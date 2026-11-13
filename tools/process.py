@@ -297,6 +297,20 @@ for hp, attr in he_polys:
             MARKERS.append((hp.centroid, st, attr))
         else:
             FACADE.append((hp.buffer(1.5), st, attr))
+# frontage pieces of unlisted buildings classified by eye from street photos (tools/facade_photos.py):
+# "<E> <N> <code>" lines become extra markers, so each wall section takes its nearest observed material
+_fn = os.path.join(RDATA if REGION else DATA, "materials_by_eye.txt")
+N_EYE = 0
+if os.path.exists(_fn):
+    for line in open(_fn):
+        line = line.split("#")[0].split()
+        if len(line) < 3 or line[2][0] == "X":
+            continue
+        kind, _, hexc = line[2].partition(":")
+        col = tuple(int(hexc[i:i + 2], 16) for i in (0, 2, 4)) if hexc else None
+        MARKERS.append((Point(float(line[0]), float(line[1])), photo_style((kind, col), line[0] + line[1]), None))
+        N_EYE += 1
+    print("materials by eye (street photos):", N_EYE)
 FACADE_TREE = shapely.STRtree([f[0] for f in FACADE])
 MARKER_TREE = shapely.STRtree([m[0] for m in MARKERS])
 print("facade polygons", len(FACADE), "markers", len(MARKERS))
@@ -919,7 +933,7 @@ for bid0, t, g in BLDG:
         rec = {"p": ring_local, "h": round(eave, 1)}
         if facade_hit is not None:
             stats["facade_bldgs"] = stats.get("facade_bldgs", 0) + 1
-            if not listed:
+            if not listed and facade_hit[2] is not None:   # None = a by-eye street-photo marker, not a listing
                 listed = facade_hit[2]
                 photo = PHOTO_MAT.get(str(listed["ListEntry"]))
         label = name or (listed and listed.get("Name").title())

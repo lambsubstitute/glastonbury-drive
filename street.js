@@ -91,7 +91,7 @@ const KINDS = {
     [sph(0.09, 0, 2.86, 0.14), MAT.sigRed], [sph(0.09, 0, 2.55, 0.14), MAT.sigRed], [sph(0.09, 0, 2.24, 0.14), MAT.sigGreen]],
 };
 
-export function buildStreet(scene, data, terrainY) {
+export function buildStreet(scene, data, terrainY, opts = {}) {
   const placed = {};     // kind -> [Matrix4]
   const posts = [];      // collision circles [x, z, r]
   const segs = [];       // collision segments [ax, az, bx, bz]
@@ -113,6 +113,7 @@ export function buildStreet(scene, data, terrainY) {
   for (const f of data.furniture) {
     const { t, x, z, r } = f;
     if (t === 'zebra' || t === 'pelican' || t === 'signals') {
+      if (opts.markings) continue;   // painted by tools/roadmarks.py into markings.bin
       // r: local +z along the road; local +x across it
       const cx = Math.cos(r), cz = -Math.sin(r), w = f.w || 7, y = terrainY(x, z) + 0.2;
       if (t === 'zebra') {
@@ -129,6 +130,7 @@ export function buildStreet(scene, data, terrainY) {
       continue;
     }
     if (t === 'busbay') {
+      if (opts.markings) continue;
       // yellow bus stop box: 13 m along the kerb, 2.4 m wide
       const sx = Math.sin(r), sz = Math.cos(r), cx = Math.cos(r), cz = -Math.sin(r), y = terrainY(x, z) + 0.2, L = 13, W = f.w;
       for (const o of [-W / 2, W / 2]) quad(x + cx * o, z + cz * o, r, L, 0.15, y, markY);

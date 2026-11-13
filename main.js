@@ -3,6 +3,7 @@ import { makeFacadeAtlases, facadeMaterial, roofTexture } from './facades.js';
 import { buildStreet, buildPavements } from './street.js';
 import { buildShopfronts } from './shopfronts.js';
 import { ao } from './ao.js';
+import { buildFacadeKit } from './kit.js';
 
 // ------------------------------------------------------------------ loading
 // The world is the town tile (data/) plus any countryside regions listed in meta.json (data/<region>/),
@@ -20,6 +21,7 @@ const FILES = 36 + REGIONS.length * 40;
 const tick = () => { loaded++; bar.style.width = `${Math.min(100, loaded / FILES * 100)}%`; };
 const V = (f) => D + f + (BUILD ? `?v=${BUILD}` : '');
 const bin = async (f, T) => { const b = await (await fetch(V(f))).arrayBuffer(); tick(); return new T(b); };
+const binOpt = async (f, T) => { try { const r = await fetch(V(f)); return new T(r.ok ? await r.arrayBuffer() : 0); } catch { return new T(0); } };
 const json = async (f) => { const j = await (await fetch(V(f))).json(); tick(); return j; };
 
 const HAS_AO = !!META.ao && META.ao === BUILD;
@@ -38,10 +40,11 @@ async function loadSet(p) {
     for (let s = 0; s < 6; s++) mul(walls[s].col, await bin(`${p}walls${s}_ao.bin`, Uint8Array));
     mul(roof.col, await bin(p + 'roof_ao.bin', Uint8Array));
   }
+  const windows = await binOpt(p + 'windows.bin', Float32Array);
   const pave = await bin(p + 'pave_tris.bin', Float32Array), kerbs = await bin(p + 'kerbs.bin', Float32Array);
   let horizon = null;
   if (tm.horizon) horizon = { ...tm.horizon, p, h: await bin(p + 'horizon.bin', Uint16Array) };
-  return { p, tm, th, dh, kg, roads, foots, water, trees, shops, street, walls, roof, pave, kerbs, horizon };
+  return { p, tm, th, dh, kg, roads, foots, water, trees, shops, street, walls, roof, pave, kerbs, horizon, windows };
 }
 const SETS = await Promise.all(['', ...REGIONS.map(r => r + '/')].map(loadSet));
 const cat = (arrs, T) => { const o = new T(arrs.reduce((a, b) => a + b.length, 0)); let k = 0; for (const a of arrs) { o.set(a, k); k += a.length; } return o; };
@@ -345,6 +348,7 @@ const ROAD_RANK = { primary: 6, trunk: 7, secondary: 5, tertiary: 4, primary_lin
 }
 
 // ------------------------------------------------------------------ buildings
+for (const s of SETS) buildFacadeKit(scene, s.windows);
 {
   const atlases = makeFacadeAtlases(renderer);
   wallData.forEach((w, s) => {

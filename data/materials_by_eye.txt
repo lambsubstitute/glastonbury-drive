@@ -118,8 +118,20 @@
 349992.1 138969.5 C:6f9cdc   # High Street, Crystals
 349983.6 138967.4 S:cfc3a0   # High Street, White Rabbit
 349975.6 138965.5 S:cfc3a0   # High Street, Dilliway & Dilliway
-349969.0 138963.9 C:d8502c   # High Street, The Goddess and the Green Man
+349969.0 138963.9 C:9ca6b2   # High Street, The Goddess and the Green Man
 350242.2 139004.7 B   # High Street, Chocolate Love Temple
 349890.1 138942.4 S:c8b488   # High Street, The Mystic Garden Gallery
 350079.5 138990.3 W   # High Street, Sew Over the Moon
 350105.4 138978.3 S:7a7060   # High Street, Hundred Monkeys
+# High Street fronts placed by house number: number line from NHLE listings + OSM addr:housenumber, fronts read from
+# full Mapillary frames (2020) and Commons photos, tied to a legible shop sign or the building next to one.
+349959.3 138961.6 C:78b4dc   # High Street no. 15: light blue wall, yellow bays (Art of Africa)
+350095.0 138991.3 S:b0a080   # High Street no. 35: stone, gabled, post box (Glastonbury Post Office)
+349986.9 138952.7 W   # High Street no. 22: white painted, next east of Tor Estates (My Fine Deli)
+349981.2 138951.2 B   # High Street no. 20 (Tor Estates)
+349974.5 138949.4 B   # High Street no. 18: same brick range (Wildwood)
+350094.3 138974.8 C:b496cc   # High Street no. 50: purple, next west of Hundred Monkeys (The Avalon Club)
+350071.6 138970.0 W   # High Street no. 46 (St Margaret's Hospice Care)
+350063.0 138968.2 C:ecd8d4   # High Street no. 44: pale pink (Shaw Trust)
+350056.3 138966.8 C:9ab87a   # High Street no. 42: green (Coffee Zero)
+350233.1 139001.4 S:a09070   # High Street no. 84: stone, next west of Chocolate Love Temple (The Wonky Broomstick)

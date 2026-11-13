@@ -1,0 +1,16 @@
+.venv/
+__pycache__/
+.DS_Store
+# large, re-downloadable or individually licensed source data
+data/*.tif
+data/*/lidar/
+data/*/horizon_*.npy
+data/os/
+data/commons/
+data/sheets/
+data/*/sheets/
+data/mly_thumbs/
+data/roof_model_raster.npy
+game/route_test.json
+data/wcs_cache/
+data/*.log

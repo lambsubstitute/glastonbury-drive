@@ -1,0 +1,92 @@
+{
+ "name": "Glastonbury",
+ "title": "Glastonbury Drive",
+ "display": "Glastonbury, Somerset, England, United Kingdom",
+ "lonlat": [
+  -2.716577,
+  51.14804
+ ],
+ "centre": [
+  349973.9,
+  138998.1
+ ],
+ "tile": [
+  348800,
+  137400,
+  351800,
+  140400
+ ],
+ "origin": [
+  350300.0,
+  138900.0
+ ],
+ "bbox_ll": "51.13307,-2.73406,51.16130,-2.68976",
+ "os_square": [
+  "ST"
+ ],
+ "spawn": {
+  "roads": [
+   "High Street",
+   "Magdalene Street"
+  ],
+  "label": "Market Cross"
+ },
+ "teleports": [
+  [
+   "Abbey Gatehouse",
+   [
+    349905,
+    138850
+   ],
+   "Magdalene Street"
+  ],
+  [
+   "St John's Church",
+   [
+    350002,
+    139011
+   ],
+   "High Street"
+  ],
+  [
+   "Abbey Barn",
+   [
+    350362,
+    138551
+   ],
+   "Bere Lane"
+  ],
+  [
+   "Chalice Well",
+   [
+    350759,
+    138566
+   ],
+   "Chilkwell Street"
+  ],
+  [
+   "Tor (foot)",
+   [
+    351000,
+    138480
+   ],
+   "Wellhouse Lane"
+  ],
+  [
+   "Tor summit",
+   [
+    351190,
+    138612
+   ],
+   false
+  ],
+  [
+   "St Benedict's",
+   [
+    349740,
+    138960
+   ],
+   "Benedict Street"
+  ]
+ ]
+}

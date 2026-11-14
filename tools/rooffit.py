@@ -60,7 +60,7 @@ def template(poly, roof_area, E, N, Z, hint=None):
     """fit a simple roof to a rectangle-like footprint. E, N: pixel centres (BNG), Z: heights above base.
     hint: OSM roof:shape if tagged. Returns dict or None when nothing fits well."""
     C, u, v, A, B, mrr = _frame(poly)
-    if poly.area / mrr.area < 0.82 or len(Z) < 12 or B < 1.5:
+    if poly.area / mrr.area < 0.82 or len(Z) < 6 or B < 1.2:
         return None
     s = (E - C[0]) * u[0] + (N - C[1]) * u[1]
     t = (E - C[0]) * v[0] + (N - C[1]) * v[1]

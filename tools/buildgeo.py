@@ -154,6 +154,7 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
     nb_idx = ctx["B_TREE"].query(poly.buffer(0.62 + 0.5), predicate="intersects")
     neigh = [ctx["B_LIST"][i] for i in nb_idx]
     neigh = [g_ for g_ in neigh if g_.intersection(poly).area < 0.5 * min(g_.area, poly.area)]
+    neigh += ctx.get("siblings", [])          # other units cut from the same block outline
     ovh = 0.62 if style == 1 else OVERHANG
     zone = poly.buffer(ovh, join_style="mitre", mitre_limit=2.0)
     if neigh:
@@ -165,7 +166,7 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
     # clean roof: a fitted template (rectangle-like footprints) or the LIDAR facets snapped to the building's
     # axes and cut along exact ridge / hip / valley lines (tools/rooffit.py); else the raw pixel facets below
     fit = None
-    if use_lidar and ipm is not None and len(ipm[0]) >= 12 and not is_church:
+    if use_lidar and ipm is not None and len(ipm[0]) >= 6 and not is_church:
         Hf = dsm_s[ipm[0], ipm[1]] - base
         fit = rooffit.template(poly, roof_area, ipm[2], ipm[3], Hf)
         if fit is None and len(pix_xy) > 1:
@@ -431,6 +432,9 @@ def build(ctx, poly, bid, base, ipm, use_lidar, eave_guess, style, wc, rc, is_ch
         bands.append((e_line, 1e9, "gable", nfl - 1, e_line, uph))
     for ri, ep in enumerate(ring_ep):
         n = len(ep)
+        if n < 3:
+            off += n            # keep btop indexing aligned with bpts
+            continue
         arr = np.array([(p[0], p[1]) for p in ep])
         g = sample(dtm, arr[:, 0], arr[:, 1]) - 0.4
         tops = np.array([base + btop[off + i] for i in range(n)])

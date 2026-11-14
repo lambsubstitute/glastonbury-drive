@@ -23,6 +23,7 @@ import shapely.ops
 from PIL import Image, ImageDraw, ImageFilter
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import buildgeo
+import terrace
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, "data")
@@ -869,8 +870,23 @@ for bid0, t, g in BLDG:
         if cut_ > 0:
             stats["courtyards_m2"] = stats.get("courtyards_m2", 0) + round(cut_)
         trimmed_parts += [p_ for p_ in polys_of(t_) if p_.area >= 6]
-    for poly in trimmed_parts:
-        bid = bid0
+    # terraces / ranges / wings mapped as one outline: cut along the borders between LIDAR roof units
+    # (tools/terrace.py), so each gets its own walls, storeys and roof
+    unit_parts = []
+    for p_ in trimmed_parts:
+        sub = [p_]
+        if t.get("building") not in ("church", "chapel", "cathedral") and p_.area >= 90:
+            in_ = p_.buffer(-0.6)
+            pm_ = pix_mask(in_) if not in_.is_empty else None
+            if pm_ is not None and len(pm_[0]) >= 60:
+                sub = terrace.split(p_, pm_[0], pm_[1], pm_[2], pm_[3], DSM_B[pm_[0], pm_[1]])
+        if len(sub) > 1:
+            stats["terrace_blocks"] = stats.get("terrace_blocks", 0) + 1
+            stats["terrace_parts"] = stats.get("terrace_parts", 0) + len(sub)
+        unit_parts += [(q_, sub if len(sub) > 1 else None, k_) for k_, q_ in enumerate(sub)]
+    for poly, siblings, unit_k in unit_parts:
+        bid = bid0 if siblings is None else f"{bid0}/u{unit_k}"
+        ctx["siblings"] = [q_ for q_ in siblings if q_ is not poly] if siblings else []
         btype = t.get("building", "yes")
         name = t.get("name")
         # listed?
@@ -928,6 +944,9 @@ for bid0, t, g in BLDG:
         else:
             stats["fallback"] += 1
             eave = tag_h or (3.0 if btype in ("garage", "garages", "shed", "service") else 5.5)
+            if not tag_h and hts is not None and len(hts) >= 3 and np.percentile(hts, 80) > 1.0:
+                # LIDAR sees a low roof (single-storey wing, garage): keep it low, not a 5.5 m default box
+                eave = float(np.clip(np.percentile(hts, 70), 2.3, 4.5))
             ridge_cap = eave
         # --- style & colours
         nm = (name or (listed or {}).get("Name") or "").lower()
